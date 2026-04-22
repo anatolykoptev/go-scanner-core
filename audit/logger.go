@@ -87,6 +87,10 @@ func (l *Logger) Log(event AuditEvent) error {
 		return fmt.Errorf("audit: write: %w", err)
 	}
 
+	if err := l.file.Sync(); err != nil {
+		return fmt.Errorf("audit: sync: %w", err)
+	}
+
 	l.prevHash = selfHash
 	return nil
 }
@@ -131,5 +135,6 @@ func (l *Logger) rotateIfNeeded() error {
 	}
 	l.file = f
 	l.prevHash = zeroHash
+	l.seq = 0
 	return nil
 }

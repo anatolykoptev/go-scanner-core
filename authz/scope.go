@@ -1,6 +1,7 @@
 package authz
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -20,6 +21,10 @@ type Checker struct {
 
 // NewChecker creates a Checker from an Allowlist.
 func NewChecker(al *Allowlist) (*Checker, error) {
+	if len(al.Scope.AllowURLs) > 0 {
+		return nil, errors.New("AllowURLs is not yet implemented; remove allow_urls from allowlist")
+	}
+
 	allowR := cidranger.NewPCTrieRanger()
 	denyR := cidranger.NewPCTrieRanger()
 

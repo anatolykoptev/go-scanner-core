@@ -2,7 +2,10 @@
 // and danger-operation classification for scan requests.
 package authz
 
-import "strings"
+import (
+	"net/http"
+	"strings"
+)
 
 // ScanTool identifies the scanning tool.
 type ScanTool string
@@ -54,9 +57,9 @@ var dangerousNucleiTemplatePrefixes = []string{"fuzzing/", "cves/"}
 
 // mutatingMethods are HTTP methods that modify server state.
 var mutatingMethods = map[string]bool{
-	"POST":   true,
-	"PUT":    true,
-	"DELETE": true,
+	http.MethodPost:   true,
+	http.MethodPut:    true,
+	http.MethodDelete: true,
 }
 
 // dangerousTLSProfiles are TLS probe types that require confirmation.
