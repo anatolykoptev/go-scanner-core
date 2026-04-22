@@ -1,0 +1,4 @@
+scope:
+  allow_domains: ["*.krolik.run", "krolik.run"]
+  allow_cidrs:   ["192.9.243.148/32"]
+  deny_domains:  ["prod.krolik.run"]
