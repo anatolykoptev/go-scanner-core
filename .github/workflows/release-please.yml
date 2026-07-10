@@ -1,0 +1,32 @@
+# Automated releases via release-please for a Go module.
+#
+# Go's release model differs from crates.io/npm: the git tag IS the release —
+# proxy.golang.org serves vX.Y.Z straight off the tag, so there is no publish job.
+# See ~/.claude/skills/go-release-setup/SKILL.md and
+# ~/.claude/skills/release-please-setup/SKILL.md for the environment gotchas
+# (Actions PR-create permission, component-tag baseline, OIDC recursion guard).
+#
+# Flow: conventional commits on main → release-please opens/updates the release PR
+# → merging it creates the tag + GitHub Release. Nothing further to publish.
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    name: Release PR / tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
