@@ -39,10 +39,10 @@ func Normalize(raw string) (string, error) {
 	if ip := net.ParseIP(raw); ip != nil {
 		return ip.String(), nil
 	}
-	return normalizeHostname(raw)
+	return NormalizeHostname(raw)
 }
 
-// normalizeHostname converts a bare hostname to lowercase punycode and
+// NormalizeHostname converts a bare hostname to lowercase punycode and
 // round-trip-verifies the result through the same IDNA profile before
 // returning it. Without the round-trip check, an input like a lone invalid
 // UTF-8 byte is silently mapped to U+FFFD and successfully punycode-encoded
@@ -52,7 +52,14 @@ func Normalize(raw string) (string, error) {
 // normalized target, then re-check it later; compare two normalized
 // values). Rejecting non-fixed-point inputs here keeps Normalize's output
 // contract honest: whatever it returns, Normalize accepts unchanged.
-func normalizeHostname(raw string) (string, error) {
+//
+// NormalizeHostname is the single IDNA entry point for this module: any
+// package that needs to canonicalize a bare hostname (not the full
+// IP/CIDR/hostname dispatch Normalize does) should call this directly rather
+// than allocating its own idna.Profile — a second hand-rolled profile with
+// different options can silently diverge from this one and canonicalize the
+// same host two different ways.
+func NormalizeHostname(raw string) (string, error) {
 	ascii, err := idnaProfile.ToASCII(raw)
 	if err != nil {
 		return "", err
