@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.2.2](https://github.com/anatolykoptev/go-scanner-core/compare/v0.2.1...v0.2.2) (2026-07-10)
+
+
+### Fixed
+
+* **authz:** consolidate domain normalization onto target.NormalizeHostname ([3c19f74](https://github.com/anatolykoptev/go-scanner-core/commit/3c19f74d51212947a54873e473ba2a90336c7983))
+* **target:** reject URL-authority/control chars in hostname normalization (SSRF) ([15caa55](https://github.com/anatolykoptev/go-scanner-core/commit/15caa55fed814acf71ec6b0aa210a0e9cf277044))
+
+
+### Changed
+
+* single IDNA normalizer + hosted CI ([0435880](https://github.com/anatolykoptev/go-scanner-core/commit/0435880c0d0ef24c218b596dd7b82b9bfbde09b3))
+
+
+### Documentation
+
+* **readme:** drop internal-repo references, present as a standalone library ([#9](https://github.com/anatolykoptev/go-scanner-core/issues/9)) ([9d6fceb](https://github.com/anatolykoptev/go-scanner-core/commit/9d6fceb9d0a2865bfb7893153ae6731c432f6a0d))
+* **readme:** drop release automation note, keep client-facing content ([#12](https://github.com/anatolykoptev/go-scanner-core/issues/12)) ([86f1428](https://github.com/anatolykoptev/go-scanner-core/commit/86f1428141bf4547d16d3d09e298ecdb9f995502))
+
 ## [0.2.1](https://github.com/anatolykoptev/go-scanner-core/compare/v0.2.0...v0.2.1) (2026-07-10)
 
 
