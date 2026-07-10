@@ -1,0 +1,23 @@
+name: preflight
+# Lean PR/push gate on the krolik self-hosted runner (GitHub-hosted Actions are not
+# used on this fleet). Runs `make preflight` = gofmt + vet + build + test. A Go-library
+# preflight is featherweight (seconds), so it carries no load-discipline risk on the box.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: preflight-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    runs-on: [self-hosted, krolik]
+    timeout-minutes: 10
+    env:
+      GOWORK: "off"
+    steps:
+      - uses: actions/checkout@v4
+      - run: make preflight
