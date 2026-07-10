@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"regexp"
 	"strings"
 
 	"golang.org/x/net/idna"
@@ -14,6 +15,27 @@ var idnaProfile = idna.New(
 	idna.ValidateLabels(true),
 	idna.StrictDomainName(false),
 )
+
+// hostnameCharset is the belt-and-suspenders gate NormalizeHostname applies
+// after IDNA: LDH (letters/digits/hyphen) + dot + underscore only, anchored
+// full-string. StrictDomainName(false) above is deliberately permissive (it
+// is what lets a legitimate underscore host like "_dmarc.example.com"
+// through), but that permissiveness is IDNA's STD3-ASCII-rule check, not a
+// URL-authority-aware check: it also accepts delimiter/control bytes
+// ('/','@',':','#','?','%','[',']','\\', space, tab, newline, ...) inside
+// what is supposed to be a bare hostname. A caller that suffix-matches such
+// a string against an allow/deny domain list (see authz.domainMatches) can
+// be tricked into a false allow — the string
+// "169.254.169.254#x.example.com" suffix-matches "*.example.com" — while a
+// downstream url.Parse/net.Dial on the "normalized" value only reads the
+// authority up to the delimiter, i.e. the cloud-metadata host, not the
+// evaluated suffix. Rejecting anything outside this charset closes that
+// parser differential without giving up underscore support (switching to
+// StrictDomainName(true) instead would reject underscores too). The first/
+// last character classes include '_' too — real underscore-prefixed labels
+// like "_dmarc.example.com" (DKIM/SPF TXT records) and "_acme-challenge."
+// start with it.
+var hostnameCharset = regexp.MustCompile(`^[a-z0-9_]([a-z0-9._-]*[a-z0-9_])?$`)
 
 // Normalize converts a raw target string to canonical form: IPv4/IPv6
 // addresses to their net.IP.String() form, hostnames to lowercase punycode
@@ -73,6 +95,13 @@ func NormalizeHostname(raw string) (string, error) {
 	}
 	if again, err := idnaProfile.ToASCII(ascii); err != nil || again != ascii {
 		return "", fmt.Errorf("target: %q does not normalize to a stable form", raw)
+	}
+	// StrictDomainName(false) permits non-STD3 ASCII (needed for underscore
+	// hosts) but also permits URL-authority delimiters and control bytes —
+	// see hostnameCharset's doc comment. Reject those explicitly; IDNA alone
+	// is not a sufficient hostname validator here.
+	if !hostnameCharset.MatchString(ascii) {
+		return "", fmt.Errorf("target: %q contains a character outside the hostname charset (letters, digits, hyphen, dot, underscore)", raw)
 	}
 	return ascii, nil
 }

@@ -31,6 +31,16 @@ func TestNormalizeDomain_AgreesWithTargetNormalizeHostname(t *testing.T) {
 		// authz now agrees with target's more permissive character-set rule
 		// rather than silently keeping its own stricter one.
 		"under_score.example.com",
+		"_dmarc.example.com",
+		// URL-authority delimiter / control-char payloads (SSRF finding):
+		// both sides must agree on REJECTION, not just acceptance. See
+		// target.hostnameCharset's doc comment.
+		"evil.com#x.example.com",
+		"corp.evil.com#x.example.com",
+		"169.254.169.254#x.example.com",
+		"evil.com?x.example.com",
+		"evil.com@x.example.com",
+		"evil.com:x.example.com",
 	}
 
 	for _, h := range hosts {
@@ -126,5 +136,66 @@ func TestNewChecker_FailClosedOnInvalidDomainPattern(t *testing.T) {
 	}})
 	if err == nil {
 		t.Error("expected NewChecker to error on an invalid deny_domains pattern")
+	}
+}
+
+// TestCheckTarget_DeniesURLAuthorityDelimiterBypass pins the CRITICAL SSRF
+// finding from crypto-security review of the target/authz consolidation:
+// with StrictDomainName(false) alone (no explicit charset gate), a target
+// string carrying a URL-authority delimiter or control byte suffix-matches
+// an allow pattern like "*.example.com" as a plain string, while a
+// downstream url.Parse/net.Dial on that same "normalized" value reads only
+// up to the delimiter — the attacker-chosen host, not the evaluated suffix.
+// Concretely: allow "*.example.com" + deny ".evil.com", and
+// "169.254.169.254#x.example.com" / "corp.evil.com#x.example.com" must both
+// be DENIED — not allowed via the fake authority trick, and not reachable
+// as a deny-listed host via allow-suffix concatenation.
+func TestCheckTarget_DeniesURLAuthorityDelimiterBypass(t *testing.T) {
+	c := makeChecker(t, &Allowlist{Scope: Scope{
+		AllowDomains: []string{"*.example.com"},
+		DenyDomains:  []string{".evil.com"},
+	}})
+
+	// Positive control: the real thing the allow pattern is meant to permit.
+	if !c.CheckTarget("sub.example.com") {
+		t.Fatal("sanity check failed: sub.example.com should be allowed by *.example.com")
+	}
+
+	payloads := []string{
+		"evil.com#x.example.com",
+		"corp.evil.com#x.example.com", // deny-listed host reached via allow-suffix concatenation
+		"169.254.169.254#x.example.com",
+		"evil.com?x.example.com",
+		"evil.com/x.example.com",
+		"evil.com@x.example.com",
+		"evil.com:x.example.com",
+		`evil.com\x.example.com`,
+		"evil.com x.example.com",
+		"evil.com\tx.example.com",
+		"evil.com\nx.example.com",
+	}
+	for _, p := range payloads {
+		if c.CheckTarget(p) {
+			t.Errorf("CheckTarget(%q) must be DENIED (URL-authority-delimiter bypass), got allowed", p)
+		}
+	}
+}
+
+// TestNewChecker_RejectsDelimiterBearingDomainPattern verifies a delimiter-
+// bearing allow/deny domain PATTERN is rejected at construction time
+// (fail-closed at config-parse time, not just at match time).
+func TestNewChecker_RejectsDelimiterBearingDomainPattern(t *testing.T) {
+	_, err := NewChecker(&Allowlist{Scope: Scope{
+		AllowDomains: []string{"evil.com#x.example.com"},
+	}})
+	if err == nil {
+		t.Error("expected NewChecker to error on a delimiter-bearing allow_domains pattern")
+	}
+
+	_, err = NewChecker(&Allowlist{Scope: Scope{
+		DenyDomains: []string{"evil.com@x.example.com"},
+	}})
+	if err == nil {
+		t.Error("expected NewChecker to error on a delimiter-bearing deny_domains pattern")
 	}
 }
