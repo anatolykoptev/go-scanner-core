@@ -74,6 +74,29 @@ func TestScope_AllowInternalNotBlanketBypass(t *testing.T) {
 	}
 }
 
+// TestScope_DenyFirstWinsOverInternalOverride pins that deny-first still wins
+// even under allow_internal: an internal target that matches an allow rule AND a
+// deny rule is DENIED — the override only lets the target reach normal
+// evaluation, it never bypasses an explicit deny.
+func TestScope_DenyFirstWinsOverInternalOverride(t *testing.T) {
+	c := makeChecker(t, &Allowlist{Scope: Scope{
+		AllowInternal: true,
+		AllowCIDRs:    []string{"127.0.0.0/8"},
+		DenyCIDRs:     []string{"127.0.0.1/32"},
+	}})
+
+	if c.CheckTarget("127.0.0.1") {
+		t.Error("127.0.0.1 must be DENIED: deny_cidrs must win over the allow_internal override")
+	}
+	d := c.CheckTargetDecision("127.0.0.1")
+	if d.Allowed {
+		t.Error("Decision.Allowed must be false when a deny rule matches, even under allow_internal")
+	}
+	if d.UsedInternalOverride {
+		t.Error("UsedInternalOverride must be false for a denied target (nothing was permitted via the override)")
+	}
+}
+
 // TestScope_DecisionNoOverrideForPublic verifies a normal public allow does NOT
 // flag the internal-override signal.
 func TestScope_DecisionNoOverrideForPublic(t *testing.T) {
