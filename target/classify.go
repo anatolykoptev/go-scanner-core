@@ -1,4 +1,3 @@
-// Package target classifies and normalizes scan targets.
 package target
 
 import "net/netip"
@@ -11,11 +10,14 @@ const (
 	ClassPublic   Class = iota // publicly routable address
 	ClassPrivate               // RFC1918 / IPv6 ULA
 	ClassSafeTest              // well-known test targets
-	ClassBlocked               // loopback, link-local — always rejected
+	ClassBlocked               // loopback, link-local incl. cloud-metadata, unspecified — no override
 )
 
-// Classify returns the Class for a normalized target string.
-// normalized is either a bare IP address, an IP:port, or a hostname.
+// Classify returns the Class for a normalized target string, checking
+// ClassBlocked, then ClassSafeTest, then ClassPrivate, and defaulting to
+// ClassPublic. normalized is either a bare IP address, an IP:port, or a
+// hostname (domain names classify as ClassSafeTest if listed, ClassPublic
+// otherwise — IP-only classes never apply to a hostname).
 func Classify(normalized string) Class {
 	if IsBlocked(normalized) {
 		return ClassBlocked
@@ -29,7 +31,12 @@ func Classify(normalized string) Class {
 	return ClassPublic
 }
 
-// IsBlocked returns true for loopback and link-local addresses.
+// IsBlocked reports whether normalized is unconditionally hard-blocked:
+// loopback, the unspecified address, link-local space (including
+// cloud-metadata endpoints reachable over it, e.g. 169.254.169.254), or the
+// AWS IMDSv6 / Alibaba IMDS addresses carved out of otherwise-allowlistable
+// ranges. See blockedPrefixes for the exact set. Unlike ClassPrivate, there
+// is no allowlist override for this — that is the point.
 func IsBlocked(normalized string) bool {
 	addr, ok := parseAddr(normalized)
 	if !ok {

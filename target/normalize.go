@@ -1,4 +1,3 @@
-// Package target provides host normalization and classification utilities.
 package target
 
 import (
@@ -16,9 +15,14 @@ var idnaProfile = idna.New(
 	idna.StrictDomainName(false),
 )
 
-// Normalize converts a raw target string to canonical form.
-// Accepts: IPv4, IPv6 (with or without brackets), hostnames, CIDRs.
-// Returns error for invalid or unsupported formats (URLs with scheme, empty string).
+// Normalize converts a raw target string to canonical form: IPv4/IPv6
+// addresses to their net.IP.String() form, hostnames to lowercase punycode
+// (IDNA), and CIDRs to their masked network form. The result is a stable key
+// safe to compare, dedupe, or pass into IsBlocked/Classify/Checker.CheckTarget
+// without those callers re-implementing normalization. Returns an error for
+// an empty string, a target carrying a URL scheme (Normalize is not a URL
+// parser — strip the scheme before calling), or a string that parses as
+// neither an IP, IPv6-bracketed address, CIDR, nor a valid IDNA hostname.
 func Normalize(raw string) (string, error) {
 	if raw == "" {
 		return "", errors.New("target must not be empty")

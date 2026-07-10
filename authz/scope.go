@@ -29,11 +29,19 @@ type Checker struct {
 // where UsedInternalOverride is true — that is the whole point of the flag being
 // explicit and observable rather than a silent bypass.
 type Decision struct {
-	Allowed              bool
+	// Allowed is the plain verdict: true if the target may be scanned.
+	Allowed bool
+	// UsedInternalOverride is true when Allowed is true ONLY because the
+	// target is otherwise hard-blocked and allow_internal permitted it. The
+	// caller MUST audit-log any decision where this is true.
 	UsedInternalOverride bool
 }
 
-// NewChecker creates a Checker from an Allowlist.
+// NewChecker builds a Checker from a parsed Allowlist, compiling its CIDR
+// rules into radix-tree ranges and normalizing its domain patterns to
+// punycode. Returns an error if any CIDR or domain pattern fails to parse, or
+// if the allowlist sets AllowURLs (not yet implemented — rejected rather than
+// silently ignored, so operator config never has a rule quietly doing nothing).
 func NewChecker(al *Allowlist) (*Checker, error) {
 	if len(al.Scope.AllowURLs) > 0 {
 		return nil, errors.New("AllowURLs is not yet implemented; remove allow_urls from allowlist")

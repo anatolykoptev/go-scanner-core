@@ -1,4 +1,3 @@
-// Package authz provides allowlist parsing, scope matching, and danger-op enforcement.
 package authz
 
 import (
@@ -7,13 +6,25 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Scope is the parsed allowlist configuration.
+// Scope is the parsed allowlist configuration. Evaluation is deny-first: a
+// target matching a deny rule is rejected even if it also matches an allow
+// rule, and a target matching neither is rejected by default.
 type Scope struct {
+	// AllowDomains are exact or wildcard domain patterns permitted to scan.
+	// See domainMatches for the "example.com" / ".example.com" / "*.example.com"
+	// pattern grammar.
 	AllowDomains []string `yaml:"allow_domains"`
-	AllowCIDRs   []string `yaml:"allow_cidrs"`
-	AllowURLs    []string `yaml:"allow_urls"`
-	DenyDomains  []string `yaml:"deny_domains"`
-	DenyCIDRs    []string `yaml:"deny_cidrs"`
+	// AllowCIDRs are IP ranges permitted to scan.
+	AllowCIDRs []string `yaml:"allow_cidrs"`
+	// AllowURLs is reserved for future URL-pattern rules; NewChecker rejects a
+	// non-empty AllowURLs today so operator config never silently no-ops.
+	AllowURLs []string `yaml:"allow_urls"`
+	// DenyDomains are domain patterns rejected even if also allowed — deny
+	// always wins over allow.
+	DenyDomains []string `yaml:"deny_domains"`
+	// DenyCIDRs are IP ranges rejected even if also allowed — deny always wins
+	// over allow.
+	DenyCIDRs []string `yaml:"deny_cidrs"`
 
 	// AllowInternal opts INTO scanning otherwise-hard-blocked internal targets
 	// (loopback, link-local, cloud-metadata, unspecified). DEFAULT false keeps
