@@ -33,7 +33,10 @@ var dangerousNmapFlags = map[string]bool{
 
 // dangerousNmapNSECategories are NSE script categories that require confirmation.
 // "vuln" is intentionally absent — informational, default-allow.
+// "all" is the meta-category that runs EVERY script (including the dangerous
+// ones), so it is treated as dangerous.
 var dangerousNmapNSECategories = map[string]bool{
+	"all":       true,
 	"exploit":   true,
 	"dos":       true,
 	"brute":     true,
@@ -118,15 +121,38 @@ func nmapProfileDangerous(profile string) bool {
 	return false
 }
 
-// splitProfileTokens splits a profile string on commas and trims whitespace,
-// returning the non-empty tokens. nmap --script and nuclei -tags both accept
-// comma-separated lists, so danger classification must check each token. A
-// single-token profile yields exactly one token, preserving prior behavior.
+// profileSeparator reports whether r separates category tokens in a profile
+// expression. nmap --script accepts not just comma-lists but boolean/space/paren
+// grammar ("default and not intrusive", "(exploit or dos)"), so we split on
+// commas, whitespace, and parentheses to surface every embedded category token.
+func profileSeparator(r rune) bool {
+	switch r {
+	case ',', '(', ')':
+		return true
+	default:
+		return r == ' ' || r == '\t' || r == '\n' || r == '\r'
+	}
+}
+
+// profileGrammarKeywords are nmap boolean operators — grammar, not categories —
+// dropped so they are never mistaken for a category token.
+var profileGrammarKeywords = map[string]bool{
+	"and": true,
+	"or":  true,
+	"not": true,
+}
+
+// splitProfileTokens tokenizes a profile expression into its category tokens.
+// nmap --script and nuclei -tags accept comma-lists AND nmap accepts boolean
+// grammar, so the danger gate must fail CLOSED: any dangerous category token
+// anywhere in the expression trips it. Boolean operators are dropped. A
+// single-token or comma-list profile yields the same tokens as before,
+// preserving prior behavior.
 func splitProfileTokens(profile string) []string {
-	parts := strings.Split(profile, ",")
-	tokens := make([]string, 0, len(parts))
-	for _, p := range parts {
-		if t := strings.TrimSpace(p); t != "" {
+	fields := strings.FieldsFunc(profile, profileSeparator)
+	tokens := make([]string, 0, len(fields))
+	for _, f := range fields {
+		if t := strings.TrimSpace(f); t != "" && !profileGrammarKeywords[t] {
 			tokens = append(tokens, t)
 		}
 	}

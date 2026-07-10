@@ -36,6 +36,30 @@ func TestDanger_NmapCompositeAllSafe(t *testing.T) {
 	}
 }
 
+func TestDanger_NmapAllMetaCategory(t *testing.T) {
+	// nmap --script all runs every script, including dangerous ones.
+	op := DangerOp{Tool: ToolNmap, Profile: "all"}
+	if !IsDangerous(op) {
+		t.Error("nmap --script all must be dangerous (runs every category)")
+	}
+}
+
+func TestDanger_NmapBooleanGrammar(t *testing.T) {
+	// nmap --script accepts boolean/space/paren grammar. The gate must fail
+	// CLOSED: any dangerous category token anywhere in the expression trips it.
+	cases := []string{
+		"(exploit or dos)",
+		"default and not intrusive",
+		"exploit or safe",
+	}
+	for _, p := range cases {
+		op := DangerOp{Tool: ToolNmap, Profile: p}
+		if !IsDangerous(op) {
+			t.Errorf("nmap script grammar %q must be dangerous (contains a dangerous category)", p)
+		}
+	}
+}
+
 func TestDanger_NucleiCompositeProfile(t *testing.T) {
 	op := DangerOp{Tool: ToolNuclei, Profile: "vuln,rce"}
 	if !IsDangerous(op) {
