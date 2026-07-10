@@ -9,6 +9,8 @@ import (
 
 	"github.com/yl2chen/cidranger"
 	"golang.org/x/net/idna"
+
+	targetclass "github.com/anatolykoptev/go-scanner-core/target"
 )
 
 // Checker evaluates targets against an Allowlist using deny-first logic.
@@ -69,6 +71,17 @@ func NewChecker(al *Allowlist) (*Checker, error) {
 // CheckTarget returns true if target is allowed, false if denied or not in scope.
 // target must already be normalized (IP, CIDR, or domain — no http:// prefix).
 func (c *Checker) CheckTarget(target string) bool {
+	// Hard-block first: loopback, link-local, cloud-metadata (169.254.169.254),
+	// and the unspecified address are always denied with no override. This guard
+	// can only NARROW authorization (never widen it), so evaluating it before the
+	// operator's allow/deny rules is safe — and it is what stops a broad or typo'd
+	// allow_cidrs (e.g. 0.0.0.0/0) from turning into an SSRF primitive.
+	// target.IsBlocked handles bare IPs and IP:port; for domains it returns false,
+	// leaving hostname evaluation to the allow/deny matching below.
+	if targetclass.IsBlocked(target) {
+		return false
+	}
+
 	if ip, err := netip.ParseAddr(target); err == nil {
 		return c.checkIP(ip)
 	}
