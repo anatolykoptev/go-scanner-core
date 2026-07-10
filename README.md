@@ -95,10 +95,7 @@ before connect.
 ## Development
 
 ```
-make preflight   # gofmt + vet + build + test (the CI gate)
+make preflight   # gofmt + vet + build + test
 make lint        # golangci-lint
 make cover       # race-enabled test suite + coverage percentage
 ```
-
-Releases are automated via release-please: conventional commits on `main` open a release
-PR; merging it tags `vX.Y.Z` (the Go module proxy serves it straight off the tag).
