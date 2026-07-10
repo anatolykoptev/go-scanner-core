@@ -1,7 +1,7 @@
 name: preflight
-# Lean PR/push gate on the krolik self-hosted runner (GitHub-hosted Actions are not
-# used on this fleet). Runs `make preflight` = gofmt + vet + build + test. A Go-library
-# preflight is featherweight (seconds), so it carries no load-discipline risk on the box.
+# PR/push gate on GitHub-hosted Actions (this is a public reference repo, where
+# hosted runners are free and the expected standard). Runs `make preflight`
+# (gofmt + vet + build + test) plus golangci-lint via its own action.
 on:
   push:
     branches: [main]
@@ -14,10 +14,15 @@ concurrency:
 
 jobs:
   preflight:
-    runs-on: [self-hosted, krolik]
+    runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      GOWORK: "off"
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
       - run: make preflight
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: v2.12.2

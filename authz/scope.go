@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/yl2chen/cidranger"
-	"golang.org/x/net/idna"
 
 	targetclass "github.com/anatolykoptev/go-scanner-core/target"
 )
@@ -215,9 +214,12 @@ func normalizeDomainPattern(pattern string) (string, error) {
 }
 
 // normalizeDomain converts a bare domain to lowercase punycode via IDNA.
+// Delegates to target.NormalizeHostname so this package and target canonicalize
+// through the exact same idna.Profile instead of each allocating its own with a
+// different option set — two hand-rolled profiles can silently diverge and
+// canonicalize the same host two different ways (issue #7).
 func normalizeDomain(domain string) (string, error) {
-	p := idna.New(idna.MapForLookup(), idna.Transitional(false))
-	return p.ToASCII(domain)
+	return targetclass.NormalizeHostname(domain)
 }
 
 // parseCIDR parses a CIDR string and returns a *net.IPNet for cidranger.

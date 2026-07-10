@@ -142,3 +142,70 @@ func TestNormalize_RejectsEmptyACELabel(t *testing.T) {
 		t.Fatal("expected error for an empty-ACE-label input, got nil")
 	}
 }
+
+// TestNormalizeHostname_RejectsURLAuthorityAndControlChars pins the SSRF
+// regression found in review of the authz consolidation (issue #7 follow-up):
+// StrictDomainName(false) drops STD3 ASCII rules, so IDNA alone happily
+// accepts a URL-authority delimiter or control byte inside what is supposed
+// to be a bare hostname — e.g. "169.254.169.254#x.example.com" round-trips
+// through ToASCII unchanged with no error. A downstream authz allow/deny
+// suffix match (".example.com") then matches the trailing junk, while a
+// caller that later feeds this string into url.Parse/net.Dial reads only
+// the authority up to the delimiter — the cloud-metadata host, not the
+// evaluated suffix. NormalizeHostname must reject any hostname whose ASCII
+// form is not pure LDH+dot+underscore, closing that parser differential.
+//
+// Some payloads contain '/', which routes through Normalize's CIDR branch
+// rather than the hostname arm, so those are exercised via NormalizeHostname
+// directly (the entry point authz.normalizeDomain calls); the rest also go
+// through the full Normalize dispatch.
+func TestNormalizeHostname_RejectsURLAuthorityAndControlChars(t *testing.T) {
+	payloads := []string{
+		"evil.com#x.example.com",
+		"corp.evil.com#x.example.com",
+		"169.254.169.254#x.example.com",
+		"evil.com?x.example.com",
+		"evil.com/x.example.com",
+		"evil.com@x.example.com",
+		"evil.com:x.example.com",
+		`evil.com\x.example.com`,
+		"evil.com x.example.com",
+		"evil.com\tx.example.com",
+		"evil.com\nx.example.com",
+		"evil.com%2fx.example.com",
+		"evil.com[x].example.com",
+	}
+	for _, p := range payloads {
+		if _, err := NormalizeHostname(p); err == nil {
+			t.Errorf("NormalizeHostname(%q) should reject a URL-authority/control-char payload, got nil error", p)
+		}
+	}
+	// The subset without '/' also exercises the full Normalize dispatch.
+	for _, p := range []string{
+		"evil.com#x.example.com",
+		"corp.evil.com#x.example.com",
+		"169.254.169.254#x.example.com",
+		"evil.com?x.example.com",
+		"evil.com@x.example.com",
+		"evil.com:x.example.com",
+	} {
+		if _, err := Normalize(p); err == nil {
+			t.Errorf("Normalize(%q) should reject a URL-authority/control-char payload, got nil error", p)
+		}
+	}
+}
+
+// TestNormalize_KeepsUnderscoreHostnames is the narrow-fix regression guard:
+// the delimiter/control-char reject must not also reject the legitimate
+// underscore-bearing hostnames (e.g. "_dmarc"-style DNS TXT record hosts)
+// that motivated moving authz onto target's more permissive
+// StrictDomainName(false) profile in the first place.
+func TestNormalize_KeepsUnderscoreHostnames(t *testing.T) {
+	got, err := Normalize("_dmarc.example.com")
+	if err != nil {
+		t.Fatalf("unexpected error for a legitimate underscore hostname: %v", err)
+	}
+	if got != "_dmarc.example.com" {
+		t.Errorf("want _dmarc.example.com, got %q", got)
+	}
+}
