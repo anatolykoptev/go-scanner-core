@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.2.1](https://github.com/anatolykoptev/go-scanner-core/compare/v0.2.0...v0.2.1) (2026-07-10)
+
+
+### Added
+
+* portfolio-grade hardening, docs, fuzzing, examples & CI ([fd455ab](https://github.com/anatolykoptev/go-scanner-core/commit/fd455ab91af0d710b1212d1162d55ba78a05108c))
+
+
+### Fixed
+
+* **target:** hard-block Alibaba Cloud IMDS endpoint 100.100.100.200 ([44a7319](https://github.com/anatolykoptev/go-scanner-core/commit/44a7319466a31b2a22d65473caf521b9fa84dd50))
+
+
+### Documentation
+
+* **godoc:** add doc.go per package, complete exported-symbol doc comments ([d769445](https://github.com/anatolykoptev/go-scanner-core/commit/d769445257f205d4550f389965f6866767d89b53))
+* **license:** add Apache-2.0 with copyright 2026 Anatoly Koptev ([bc7b17a](https://github.com/anatolykoptev/go-scanner-core/commit/bc7b17ac66e6869d4759c3807b110374b80d9999))
+* **readme:** add badges, Design & threat model section, fix stale snippet ([849849e](https://github.com/anatolykoptev/go-scanner-core/commit/849849e1991c39be38aabd23005367b275d73bcc))
+* **security:** add responsible-disclosure policy ([c25adda](https://github.com/anatolykoptev/go-scanner-core/commit/c25addae65cadc9b62fa989bdd2d6dfe030ef4d7))
+
 ## [0.2.0](https://github.com/anatolykoptev/go-scanner-core/compare/v0.1.1...v0.2.0) (2026-07-10)
 
 
