@@ -15,10 +15,22 @@ import (
 
 // Checker evaluates targets against an Allowlist using deny-first logic.
 type Checker struct {
-	allowRanger  cidranger.Ranger
-	denyRanger   cidranger.Ranger
-	allowDomains []string
-	denyDomains  []string
+	allowRanger   cidranger.Ranger
+	denyRanger    cidranger.Ranger
+	allowDomains  []string
+	denyDomains   []string
+	allowInternal bool
+}
+
+// Decision is the outcome of evaluating a target. It carries the plain Allowed
+// verdict plus UsedInternalOverride, which is true when a hard-blocked internal
+// target (loopback / link-local / cloud-metadata / unspecified) was permitted
+// only because allow_internal is set. The consumer MUST audit-log any decision
+// where UsedInternalOverride is true — that is the whole point of the flag being
+// explicit and observable rather than a silent bypass.
+type Decision struct {
+	Allowed              bool
+	UsedInternalOverride bool
 }
 
 // NewChecker creates a Checker from an Allowlist.
@@ -61,27 +73,52 @@ func NewChecker(al *Allowlist) (*Checker, error) {
 	}
 
 	return &Checker{
-		allowRanger:  allowR,
-		denyRanger:   denyR,
-		allowDomains: allowDomains,
-		denyDomains:  denyDomains,
+		allowRanger:   allowR,
+		denyRanger:    denyR,
+		allowDomains:  allowDomains,
+		denyDomains:   denyDomains,
+		allowInternal: al.Scope.AllowInternal,
 	}, nil
 }
 
 // CheckTarget returns true if target is allowed, false if denied or not in scope.
 // target must already be normalized (IP, CIDR, or domain — no http:// prefix).
+//
+// Use CheckTargetDecision when you need the audit signal for internal-override
+// permits; CheckTarget is the plain-bool shim over it.
 func (c *Checker) CheckTarget(target string) bool {
-	// Hard-block first: loopback, link-local, cloud-metadata (169.254.169.254),
-	// and the unspecified address are always denied with no override. This guard
-	// can only NARROW authorization (never widen it), so evaluating it before the
-	// operator's allow/deny rules is safe — and it is what stops a broad or typo'd
-	// allow_cidrs (e.g. 0.0.0.0/0) from turning into an SSRF primitive.
-	// target.IsBlocked handles bare IPs and IP:port; for domains it returns false,
-	// leaving hostname evaluation to the allow/deny matching below.
-	if targetclass.IsBlocked(target) {
-		return false
+	return c.CheckTargetDecision(target).Allowed
+}
+
+// CheckTargetDecision evaluates target and reports both the verdict and whether
+// the allow_internal override was exercised (UsedInternalOverride).
+//
+// Hard-blocked targets (loopback, link-local, cloud-metadata 169.254.169.254,
+// the unspecified address) are DENIED with no override UNLESS allow_internal is
+// set — in which case the target falls through to the NORMAL allow/deny
+// evaluation and is permitted ONLY if it also matches an explicit allow rule.
+// So an internal target is reachable only when BOTH allow_internal is set AND it
+// matches an allow rule; the flag is never a blanket open. Callers MUST audit
+// any decision where UsedInternalOverride is true.
+func (c *Checker) CheckTargetDecision(target string) Decision {
+	// target.IsBlocked handles bare IPs and IP:port; for domains it returns
+	// false, leaving hostname evaluation to the allow/deny matching below.
+	blocked := targetclass.IsBlocked(target)
+	if blocked && !c.allowInternal {
+		return Decision{Allowed: false}
 	}
 
+	allowed := c.evaluate(target)
+	return Decision{
+		Allowed:              allowed,
+		UsedInternalOverride: blocked && allowed,
+	}
+}
+
+// evaluate applies the operator's deny-first allow/deny rules to a normalized
+// target, without the internal hard-block. It is the shared core behind
+// CheckTargetDecision.
+func (c *Checker) evaluate(target string) bool {
 	if ip, err := netip.ParseAddr(target); err == nil {
 		return c.checkIP(ip)
 	}
