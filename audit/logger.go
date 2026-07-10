@@ -4,12 +4,21 @@ package audit
 import (
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 )
+
+// errLoggerFailed is returned by Log when the logger holds no valid file
+// descriptor — either it was closed, or a rotation failed and could not recover.
+var errLoggerFailed = errors.New("audit: logger has no open file (closed or rotation failed)")
+
+// maxRotationGenerations caps the search for a free numbered segment name so a
+// directory already full of generations fails loudly instead of looping forever.
+const maxRotationGenerations = 100000
 
 const (
 	zeroHash = "0000000000000000000000000000000000000000000000000000000000000000"
@@ -56,8 +65,17 @@ func (l *Logger) Log(event AuditEvent) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	if l.file == nil {
+		return errLoggerFailed
+	}
+
 	if err := l.rotateIfNeeded(); err != nil {
 		return err
+	}
+	// rotateIfNeeded may have left the logger without a usable descriptor if a
+	// rotation failed to reopen; guard again before writing.
+	if l.file == nil {
+		return errLoggerFailed
 	}
 
 	l.seq++
@@ -107,8 +125,8 @@ func (l *Logger) Close() error {
 	return err
 }
 
-// rotateIfNeeded renames the current file to path+".1" and opens a fresh file.
-// Must be called with l.mu held.
+// rotateIfNeeded rotates the current segment aside and opens a fresh one when it
+// has reached maxSizeBytes. Must be called with l.mu held.
 func (l *Logger) rotateIfNeeded() error {
 	if l.maxSizeBytes <= 0 {
 		return nil
@@ -120,21 +138,67 @@ func (l *Logger) rotateIfNeeded() error {
 	if info.Size() < l.maxSizeBytes {
 		return nil
 	}
+	return l.rotate()
+}
+
+// rotate moves the current segment to the next free numbered generation and
+// opens a fresh file. It deliberately preserves l.prevHash and l.seq so the
+// tamper-evident hash chain and sequence numbers stay continuous across the
+// rotation boundary. On any failure it leaves l.file either usable (recovered)
+// or nil (explicitly failed) — never a closed descriptor. Must hold l.mu.
+func (l *Logger) rotate() error {
+	dest, err := nextRotationName(l.path)
+	if err != nil {
+		return fmt.Errorf("audit: rotate name: %w", err)
+	}
 
 	if err := l.file.Close(); err != nil {
+		l.recoverFile() // reopen so the logger stays usable
 		return fmt.Errorf("audit: close for rotate: %w", err)
 	}
 
-	if err := os.Rename(l.path, l.path+".1"); err != nil {
+	// Move the just-closed segment aside. nextRotationName guarantees dest does
+	// not exist, so an older generation is never overwritten.
+	if err := os.Rename(l.path, dest); err != nil {
+		l.recoverFile() // the source still exists — reopen and keep appending
 		return fmt.Errorf("audit: rename for rotate: %w", err)
 	}
 
 	f, err := os.OpenFile(l.path, os.O_CREATE|os.O_APPEND|os.O_RDWR, filePerm)
 	if err != nil {
+		l.file = nil // no valid descriptor: logger is explicitly failed
 		return fmt.Errorf("audit: open after rotate: %w", err)
 	}
 	l.file = f
-	l.prevHash = zeroHash
-	l.seq = 0
+	// NOTE: l.prevHash and l.seq are intentionally NOT reset here — resetting
+	// them would break the hash chain link and restart seq at each rotation.
 	return nil
+}
+
+// nextRotationName returns the lowest-numbered "path.N" (N ≥ 1) that does not yet
+// exist, so rotation never overwrites an existing generation.
+func nextRotationName(path string) (string, error) {
+	for n := 1; n <= maxRotationGenerations; n++ {
+		candidate := fmt.Sprintf("%s.%d", path, n)
+		_, err := os.Stat(candidate)
+		if os.IsNotExist(err) {
+			return candidate, nil
+		}
+		if err != nil {
+			return "", fmt.Errorf("stat %s: %w", candidate, err)
+		}
+	}
+	return "", fmt.Errorf("no free rotation generation below %s.%d", path, maxRotationGenerations)
+}
+
+// recoverFile reopens l.path in append mode after a failed rotation so the logger
+// is not left holding a closed descriptor. If reopen fails, l.file is set to nil
+// and subsequent Log calls return errLoggerFailed instead of panicking.
+func (l *Logger) recoverFile() {
+	f, err := os.OpenFile(l.path, os.O_CREATE|os.O_APPEND|os.O_RDWR, filePerm)
+	if err != nil {
+		l.file = nil
+		return
+	}
+	l.file = f
 }
