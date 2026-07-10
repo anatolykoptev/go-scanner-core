@@ -1,5 +1,3 @@
-// Package authz provides allowlist validation, scope matching,
-// and danger-operation classification for scan requests.
 package authz
 
 import (
@@ -17,11 +15,19 @@ const (
 	ToolTLS    ScanTool = "tls"
 )
 
-// DangerOp describes a potentially dangerous scan operation.
+// DangerOp describes a potentially dangerous scan operation to classify via
+// IsDangerous.
 type DangerOp struct {
-	Tool    ScanTool
-	Profile string   // nmap NSE category, nuclei tag/severity/template path
-	Flags   []string // additional nmap flags or nuclei HTTP methods
+	// Tool selects which classification rules apply.
+	Tool ScanTool
+	// Profile is a tool-specific selector: nmap NSE script category(-ies),
+	// nuclei tag/severity/template path. Accepts comma-lists and, for nmap,
+	// boolean grammar ("exploit and not intrusive") — every embedded category
+	// token is checked.
+	Profile string
+	// Flags carries tool-specific extras: nmap CLI flags (e.g. -A, -O,
+	// --script-args) or nuclei's mutating HTTP methods.
+	Flags []string
 }
 
 // dangerousNmapFlags are nmap CLI flags that require confirmation.
@@ -71,7 +77,12 @@ var dangerousTLSProfiles = map[string]bool{
 	"ccs_injection": true,
 }
 
-// IsDangerous returns true if the operation requires confirm_dangerous=true.
+// IsDangerous reports whether op requires an explicit confirm_dangerous=true
+// from the caller before running. It fails CLOSED: any single dangerous
+// token inside a comma-list or nmap boolean expression trips it, and an
+// unrecognized ScanTool is treated as safe only because there is no known
+// danger rule for it — new tools must add a case here, not rely on the
+// default.
 func IsDangerous(op DangerOp) bool {
 	switch op.Tool {
 	case ToolNmap:

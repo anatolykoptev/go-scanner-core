@@ -114,6 +114,15 @@ func TestIsBlocked_IMDSv6(t *testing.T) {
 	}
 }
 
+func TestIsBlocked_AlibabaIMDS(t *testing.T) {
+	if !IsBlocked("100.100.100.200") {
+		t.Error("IsBlocked(100.100.100.200) = false, want true (Alibaba Cloud IMDS endpoint)")
+	}
+	if Classify("100.100.100.200") != ClassBlocked {
+		t.Error("Classify(100.100.100.200) != ClassBlocked (Alibaba IMDS must hard-block)")
+	}
+}
+
 func TestIsSafeTestTarget(t *testing.T) {
 	if !IsSafeTestTarget("scanme.nmap.org") {
 		t.Error("scanme.nmap.org should be safe test")

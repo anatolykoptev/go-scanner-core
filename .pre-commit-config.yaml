@@ -14,14 +14,21 @@ repos:
       - id: go-vet
         name: go vet
         language: system
-        entry: go
-        args: [vet, ./...]
+        # env GOWORK=off: a stray go.work in a parent dir (e.g. this repo checked
+        # out inside another module's workspace) makes `go vet` fail with
+        # "directory prefix . does not contain modules". Off is a no-op on a
+        # clean contributor machine with no go.work.
+        entry: env
+        args: [GOWORK=off, go, vet, ./...]
         types: [go]
         pass_filenames: false
       - id: golangci-lint
         name: golangci-lint
         language: system
-        entry: golangci-lint
-        args: [run, ./...]
+        # --allow-parallel-runners: this repo's worktrees can share a
+        # golangci-lint cache lock; without the flag a concurrent run in another
+        # worktree fails the hook instead of waiting for the lock.
+        entry: env
+        args: [GOWORK=off, golangci-lint, run, --allow-parallel-runners, ./...]
         types: [go]
         pass_filenames: false

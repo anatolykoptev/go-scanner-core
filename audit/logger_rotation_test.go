@@ -72,6 +72,51 @@ func TestLogger_LogAfterCloseErrors(t *testing.T) {
 	}
 }
 
+// TestLogger_RotateRenameFailureRecovers forces rotate's os.Rename to fail
+// (by denying write on the parent directory, after the pre-rename Close has
+// already succeeded) and asserts recoverFile puts the logger back into a
+// usable state — reopening the still-present original path — rather than
+// leaving it holding a closed descriptor. This is the failure mode rotate's
+// doc comment promises to handle: "never a closed descriptor".
+func TestLogger_RotateRenameFailureRecovers(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "audit.jsonl")
+	l, err := New(path, 0)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer func() { _ = l.Close() }()
+
+	if err := l.Log(makeEvent("nmap", "before")); err != nil {
+		t.Fatalf("Log: %v", err)
+	}
+
+	// Deny write+execute-for-create on the directory so os.Rename inside
+	// rotate() fails; opening the still-present original path back up does
+	// not need directory write permission, so recoverFile can still succeed.
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	defer func() { _ = os.Chmod(dir, 0o750) }() // let t.TempDir() cleanup remove it
+
+	l.mu.Lock()
+	rotateErr := l.rotate()
+	l.mu.Unlock()
+	if rotateErr == nil {
+		t.Fatal("expected rotate to fail when the directory denies rename, got nil")
+	}
+	if l.file == nil {
+		t.Fatal("recoverFile should have reopened the logger after a failed rename, got nil file")
+	}
+
+	if err := os.Chmod(dir, 0o750); err != nil {
+		t.Fatalf("chmod restore: %v", err)
+	}
+	if err := l.Log(makeEvent("nmap", "after")); err != nil {
+		t.Fatalf("Log after recovered rotate failure: %v", err)
+	}
+}
+
 // assertContinuousChain verifies that seq is monotonic (1-based) and the
 // prev_hash/self_hash chain links every event to its predecessor, seeded with
 // zeroHash — including across rotation boundaries.

@@ -1,4 +1,3 @@
-// Package audit provides an append-only JSONL audit logger with SHA-256 hash chain.
 package audit
 
 import (
@@ -37,9 +36,12 @@ type Logger struct {
 	prevHash     string
 }
 
-// New creates a Logger writing to path.
-// Creates parent directories if needed.
-// maxSizeBytes: rotate when file exceeds this size (0 = no rotation).
+// New opens (or creates) the JSONL audit log at path in append mode, creating
+// parent directories as needed, and returns a Logger ready for concurrent use.
+// maxSizeBytes rotates the file aside once it exceeds that size; 0 disables
+// rotation. The hash chain always starts fresh from zeroHash — New does not
+// read an existing file's last record, so appending to a pre-existing log
+// with a different Logger instance starts a new, disconnected chain segment.
 func New(path string, maxSizeBytes int64) (*Logger, error) {
 	if err := os.MkdirAll(filepath.Dir(path), dirPerm); err != nil {
 		return nil, fmt.Errorf("audit: mkdir: %w", err)
@@ -58,9 +60,11 @@ func New(path string, maxSizeBytes int64) (*Logger, error) {
 	}, nil
 }
 
-// Log appends an AuditEvent to the JSONL file.
-// Fills in: ts, seq, prev_hash, self_hash automatically.
-// Thread-safe.
+// Log appends event to the JSONL file as one record, filling in TS, Seq,
+// PrevHash, and SelfHash — any caller-supplied values in those fields are
+// overwritten. Rotates the current segment first if it has grown past
+// maxSizeBytes. fsyncs before returning, so a successful return means the
+// record is durable on disk, not just buffered. Safe for concurrent use.
 func (l *Logger) Log(event AuditEvent) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -113,7 +117,9 @@ func (l *Logger) Log(event AuditEvent) error {
 	return nil
 }
 
-// Close flushes and closes the logger.
+// Close closes the underlying file. Subsequent Log calls return
+// errLoggerFailed rather than reopening it — Close is a terminal operation.
+// Safe to call once; a nil-file Logger (already closed) returns nil.
 func (l *Logger) Close() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
