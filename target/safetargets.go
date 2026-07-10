@@ -4,10 +4,13 @@ import "net/netip"
 
 // blockedPrefixes are always denied with no override.
 var blockedPrefixes = []netip.Prefix{
-	netip.MustParsePrefix("127.0.0.0/8"),    // IPv4 loopback
-	netip.MustParsePrefix("::1/128"),        // IPv6 loopback
-	netip.MustParsePrefix("0.0.0.0/32"),     // unspecified
-	netip.MustParsePrefix("169.254.0.0/16"), // link-local
+	netip.MustParsePrefix("127.0.0.0/8"),       // IPv4 loopback
+	netip.MustParsePrefix("::1/128"),           // IPv6 loopback
+	netip.MustParsePrefix("0.0.0.0/32"),        // IPv4 unspecified
+	netip.MustParsePrefix("::/128"),            // IPv6 unspecified
+	netip.MustParsePrefix("169.254.0.0/16"),    // IPv4 link-local (incl. cloud-metadata 169.254.169.254)
+	netip.MustParsePrefix("fe80::/10"),         // IPv6 link-local
+	netip.MustParsePrefix("fd00:ec2::254/128"), // AWS IMDSv6 endpoint (hard-block over the fd00::/8 ULA range)
 }
 
 // privatePrefixes are RFC1918 and IPv6 ULA — denied unless allowlisted.

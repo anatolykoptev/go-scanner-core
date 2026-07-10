@@ -93,6 +93,27 @@ func TestIsBlocked(t *testing.T) {
 	}
 }
 
+func TestIsBlocked_IPv6LinkLocal(t *testing.T) {
+	cases := []string{"fe80::1", "fe80::dead:beef", "febf::1"}
+	for _, ip := range cases {
+		if !IsBlocked(ip) {
+			t.Errorf("IsBlocked(%q) = false, want true (IPv6 link-local fe80::/10)", ip)
+		}
+		if Classify(ip) != ClassBlocked {
+			t.Errorf("Classify(%q) != ClassBlocked (IPv6 link-local)", ip)
+		}
+	}
+}
+
+func TestIsBlocked_IMDSv6(t *testing.T) {
+	if !IsBlocked("fd00:ec2::254") {
+		t.Error("IsBlocked(fd00:ec2::254) = false, want true (AWS IMDSv6 endpoint)")
+	}
+	if Classify("fd00:ec2::254") != ClassBlocked {
+		t.Error("Classify(fd00:ec2::254) != ClassBlocked (IMDSv6 must hard-block over the ULA private range)")
+	}
+}
+
 func TestIsSafeTestTarget(t *testing.T) {
 	if !IsSafeTestTarget("scanme.nmap.org") {
 		t.Error("scanme.nmap.org should be safe test")

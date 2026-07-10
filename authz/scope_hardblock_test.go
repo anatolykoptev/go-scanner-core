@@ -23,6 +23,19 @@ func TestScope_HardBlockOverridesBroadAllow(t *testing.T) {
 	}
 }
 
+// TestScope_HardBlockIPv6LinkLocal verifies an IPv6 link-local target is denied
+// even under a broad IPv6 allow entry when allow_internal is unset (finding: the
+// IPv6 link-local range fe80::/10 must be hard-blocked like IPv4 link-local).
+func TestScope_HardBlockIPv6LinkLocal(t *testing.T) {
+	c := makeChecker(t, &Allowlist{Scope: Scope{
+		AllowCIDRs: []string{"::/0"},
+	}})
+
+	if c.CheckTarget("fe80::1") {
+		t.Error("fe80::1 must be hard-blocked regardless of allow_cidrs ::/0")
+	}
+}
+
 // TestScope_AllowInternalPermitsMatchedInternal verifies the audited opt-in
 // bypass: with allow_internal set AND the internal target inside an allow rule,
 // the target is permitted (an authorized scan of a loopback/link-local service).
