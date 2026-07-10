@@ -117,3 +117,28 @@ func TestNormalize_InvalidHostname(t *testing.T) {
 		t.Error("expected error for invalid hostname, got nil")
 	}
 }
+
+// TestNormalize_RejectsNonRoundTrippingUTF8 pins a bug FuzzNormalize found:
+// a lone invalid UTF-8 byte was silently mapped to U+FFFD and successfully
+// punycode-encoded on the first ToASCII pass, but re-normalizing that
+// "normalized" output failed — U+FFFD is disallowed by the IDNA2008 table
+// consulted on decode. Normalize must reject the input outright rather than
+// return a value it would itself refuse on a second call.
+func TestNormalize_RejectsNonRoundTrippingUTF8(t *testing.T) {
+	_, err := Normalize("\xa0")
+	if err == nil {
+		t.Fatal("expected error for a non-round-tripping IDNA input, got nil")
+	}
+}
+
+// TestNormalize_RejectsEmptyACELabel pins a second bug FuzzNormalize found:
+// "Xn--" (an ACE prefix with an empty suffix) encodes to "" with no IDNA
+// error, but Normalize treats "" as an invalid target — so without this
+// guard, Normalize("Xn--") would succeed while re-normalizing its own
+// output failed.
+func TestNormalize_RejectsEmptyACELabel(t *testing.T) {
+	_, err := Normalize("Xn--")
+	if err == nil {
+		t.Fatal("expected error for an empty-ACE-label input, got nil")
+	}
+}

@@ -39,7 +39,35 @@ func Normalize(raw string) (string, error) {
 	if ip := net.ParseIP(raw); ip != nil {
 		return ip.String(), nil
 	}
-	return idnaProfile.ToASCII(raw)
+	return normalizeHostname(raw)
+}
+
+// normalizeHostname converts a bare hostname to lowercase punycode and
+// round-trip-verifies the result through the same IDNA profile before
+// returning it. Without the round-trip check, an input like a lone invalid
+// UTF-8 byte is silently mapped to U+FFFD and successfully punycode-encoded
+// on the first pass, but the IDNA2008 disallowed-codepoint table rejects
+// U+FFFD on decode — so a second Normalize call on that "normalized" value
+// would fail, breaking the idempotency every caller relies on (log a
+// normalized target, then re-check it later; compare two normalized
+// values). Rejecting non-fixed-point inputs here keeps Normalize's output
+// contract honest: whatever it returns, Normalize accepts unchanged.
+func normalizeHostname(raw string) (string, error) {
+	ascii, err := idnaProfile.ToASCII(raw)
+	if err != nil {
+		return "", err
+	}
+	// idna can encode a label like "Xn--" (case-insensitive ACE prefix, empty
+	// suffix) down to "" with no error. Normalize itself treats "" as an
+	// invalid target, so accepting it here would make Normalize(raw) succeed
+	// while Normalize(Normalize(raw)) errors — reject it at the source instead.
+	if ascii == "" {
+		return "", fmt.Errorf("target: %q normalizes to an empty hostname", raw)
+	}
+	if again, err := idnaProfile.ToASCII(ascii); err != nil || again != ascii {
+		return "", fmt.Errorf("target: %q does not normalize to a stable form", raw)
+	}
+	return ascii, nil
 }
 
 func normalizeCIDR(raw string) (string, error) {
