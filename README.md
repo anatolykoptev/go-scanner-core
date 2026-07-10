@@ -10,8 +10,7 @@ to it — security scanners, crawlers, URL fetchers. It is the **guardrail** tha
 powerful outbound tool from becoming a weapon: against your own infrastructure (SSRF),
 against unauthorized targets (scope), and against undetectable misuse (tamper-evident audit).
 
-Extracted from [go-wowa]; currently consumed by go-pentest. No `main`, no binaries — a
-library you wire into the authorize/dial path of your own service.
+No `main`, no binaries — a library you wire into the authorize/dial path of your own service.
 
 ```
 go get github.com/anatolykoptev/go-scanner-core@latest
@@ -89,10 +88,9 @@ hard-block primitive `authz` enforces first.
 
 **What this does NOT do**: it does not resolve DNS or re-check a target after
 authorization. A hostname authorized against `Checker.CheckTarget` can later resolve to a
-different (possibly blocked) address — the classic DNS-rebind gap. The consumer must
-re-validate the resolved IP at its actual dial site; see
-[go-pentest#25](https://github.com/anatolykoptev/go-pentest/issues/25) for the tracked
-follow-up in this library's own consumer.
+different (possibly blocked) address — the classic DNS-rebind gap. The caller must
+re-validate the resolved IP at its actual dial site, after resolution and immediately
+before connect.
 
 ## Development
 
@@ -104,5 +102,3 @@ make cover       # race-enabled test suite + coverage percentage
 
 Releases are automated via release-please: conventional commits on `main` open a release
 PR; merging it tags `vX.Y.Z` (the Go module proxy serves it straight off the tag).
-
-[go-wowa]: https://github.com/anatolykoptev/go-wowa
