@@ -83,47 +83,76 @@ func IsDangerous(op DangerOp) bool {
 }
 
 func isNmapDangerous(op DangerOp) bool {
-	// Check individual flags.
-	scriptArgsUnsafe := false
-	for i, f := range op.Flags {
+	return nmapFlagsDangerous(op.Flags) || nmapProfileDangerous(op.Profile)
+}
+
+// nmapFlagsDangerous reports whether any nmap CLI flag requires confirmation,
+// including the --script-args unsafe=1 trigger in both split and combined forms.
+func nmapFlagsDangerous(flags []string) bool {
+	for i, f := range flags {
 		if dangerousNmapFlags[f] {
 			return true
 		}
-		// --script-args unsafe=1 — the trigger value must follow in the next element.
-		if f == "--script-args" {
-			next := ""
-			if i+1 < len(op.Flags) {
-				next = op.Flags[i+1]
-			}
-			if strings.Contains(next, "unsafe=1") {
-				scriptArgsUnsafe = true
-			}
+		// --script-args unsafe=1 — the trigger value follows in the next element.
+		if f == "--script-args" && i+1 < len(flags) && strings.Contains(flags[i+1], "unsafe=1") {
+			return true
 		}
-		// Also handle combined form: "--script-args=unsafe=1" or "unsafe=1" as single element.
+		// Combined form: "--script-args=unsafe=1" as a single element.
 		if strings.HasPrefix(f, "--script-args") && strings.Contains(f, "unsafe=1") {
-			scriptArgsUnsafe = true
+			return true
 		}
 	}
-	if scriptArgsUnsafe {
-		return true
-	}
+	return false
+}
 
-	// Check NSE category profile.
-	return dangerousNmapNSECategories[op.Profile]
+// nmapProfileDangerous reports whether any NSE category token requires
+// confirmation. nmap --script accepts comma-lists (e.g. "exploit,dos"), so we
+// tokenize and fail CLOSED if ANY token is dangerous — an exact map lookup on
+// the whole string would miss composites.
+func nmapProfileDangerous(profile string) bool {
+	for _, tok := range splitProfileTokens(profile) {
+		if dangerousNmapNSECategories[tok] {
+			return true
+		}
+	}
+	return false
+}
+
+// splitProfileTokens splits a profile string on commas and trims whitespace,
+// returning the non-empty tokens. nmap --script and nuclei -tags both accept
+// comma-separated lists, so danger classification must check each token. A
+// single-token profile yields exactly one token, preserving prior behavior.
+func splitProfileTokens(profile string) []string {
+	parts := strings.Split(profile, ",")
+	tokens := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if t := strings.TrimSpace(p); t != "" {
+			tokens = append(tokens, t)
+		}
+	}
+	return tokens
 }
 
 func isNucleiDangerous(op DangerOp) bool {
+	// nuclei -tags accepts comma-lists (e.g. "vuln,rce"); tokenize and fail
+	// CLOSED if ANY token is a dangerous tag/severity or a mutating template path.
+	tokens := splitProfileTokens(op.Profile)
+
 	// Tag / severity check.
-	if dangerousNucleiProfiles[op.Profile] {
-		return true
+	for _, tok := range tokens {
+		if dangerousNucleiProfiles[tok] {
+			return true
+		}
 	}
 
 	// Template path check: fuzzing/ or cves/ + mutating method.
-	for _, prefix := range dangerousNucleiTemplatePrefixes {
-		if strings.HasPrefix(op.Profile, prefix) {
-			for _, flag := range op.Flags {
-				if mutatingMethods[strings.ToUpper(flag)] {
-					return true
+	for _, tok := range tokens {
+		for _, prefix := range dangerousNucleiTemplatePrefixes {
+			if strings.HasPrefix(tok, prefix) {
+				for _, flag := range op.Flags {
+					if mutatingMethods[strings.ToUpper(flag)] {
+						return true
+					}
 				}
 			}
 		}
