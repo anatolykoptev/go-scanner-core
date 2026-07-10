@@ -149,11 +149,13 @@ var profileGrammarKeywords = map[string]bool{
 // single-token or comma-list profile yields the same tokens as before,
 // preserving prior behavior.
 func splitProfileTokens(profile string) []string {
+	// FieldsFunc never emits empty or separator-only fields, so only the
+	// grammar-keyword filter is needed.
 	fields := strings.FieldsFunc(profile, profileSeparator)
 	tokens := make([]string, 0, len(fields))
 	for _, f := range fields {
-		if t := strings.TrimSpace(f); t != "" && !profileGrammarKeywords[t] {
-			tokens = append(tokens, t)
+		if !profileGrammarKeywords[f] {
+			tokens = append(tokens, f)
 		}
 	}
 	return tokens
