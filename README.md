@@ -95,7 +95,22 @@ before connect.
 ## Development
 
 ```
-make preflight   # gofmt + vet + build + test
+make preflight   # gostall + gofmt + vet + build + race tests (what CI runs)
 make lint        # golangci-lint
 make cover       # race-enabled test suite + coverage percentage
 ```
+
+`make preflight` needs [gostall](https://github.com/erfanmomeniii/gostall) v1.0.0 on the
+path (`go install github.com/erfanmomeniii/gostall/cmd/gostall@v1.0.0`); the target says so
+when it is missing. See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and
+[docs/INDEX.md](docs/INDEX.md) for every document in the repository.
+
+## Status
+
+Pre-1.0 (`v0.2.x`): the API can still change in a minor release. Only the latest release
+receives security fixes, see [SECURITY.md](SECURITY.md). Releases and the changelog are
+produced by release-please from Conventional Commits.
+
+## Licence
+
+Apache-2.0, see [LICENSE](LICENSE).
