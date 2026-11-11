@@ -29,14 +29,14 @@ func TestScope_MatchesCIDRv4(t *testing.T) {
 
 func TestScope_MatchesCIDRv6(t *testing.T) {
 	c := makeChecker(t, &Allowlist{Scope: Scope{
-		AllowCIDRs: []string{"2001:db8::/32"},
+		AllowCIDRs: []string{"2001:db8:1::/48"},
 	}})
 
-	if !c.CheckTarget("2001:db8::1") {
-		t.Error("2001:db8::1 should be allowed by 2001:db8::/32")
+	if !c.CheckTarget("2001:db8:1::1") {
+		t.Error("2001:db8:1::1 should be allowed by 2001:db8:1::/48")
 	}
-	if c.CheckTarget("2001:db9::1") {
-		t.Error("2001:db9::1 should NOT be allowed by 2001:db8::/32")
+	if c.CheckTarget("2001:db8:2::1") {
+		t.Error("2001:db8:2::1 should NOT be allowed by 2001:db8:1::/48")
 	}
 }
 

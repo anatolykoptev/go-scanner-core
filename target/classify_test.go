@@ -72,7 +72,7 @@ func TestClassify_LinkLocalBlocked(t *testing.T) {
 }
 
 func TestClassify_PublicIP(t *testing.T) {
-	cases := []string{"8.8.8.8", "1.1.1.1", "93.184.216.34"}
+	cases := []string{"8.8.8.8", "1.1.1.1", "9.9.9.9"}
 	for _, ip := range cases {
 		got := Classify(ip)
 		if got != ClassPublic {
