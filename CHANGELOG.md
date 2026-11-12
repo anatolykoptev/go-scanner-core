@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.3](https://github.com/anatolykoptev/go-scanner-core/compare/v0.2.2...v0.2.3) (2026-11-12)
+
+
+### Documentation
+
+* bring repository documents up to the repo-standards set ([#16](https://github.com/anatolykoptev/go-scanner-core/issues/16)) ([2edc29d](https://github.com/anatolykoptev/go-scanner-core/commit/2edc29d3e32a284388b5514ce4a08cb40fc9fc02))
+
 ## [0.2.2](https://github.com/anatolykoptev/go-scanner-core/compare/v0.2.1...v0.2.2) (2026-07-10)
 
 
