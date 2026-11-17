@@ -244,13 +244,28 @@ jobs:
           cache: true
       # #53: gostall — static analysis for lock-order inversions, missing
       # unlocks, WaitGroup misuse, channel deadlocks, livelocks, starvation.
-      - name: Ensure gostall v1.0.0 (pinned)
+      # gostall v1.0.0 pins an old golang.org/x/tools that cannot load Go 1.27
+      # stdlib packages ("package "sync" without types was imported"), so it is
+      # built in a throwaway module with x/tools raised to a release that reads
+      # Go 1.27 export data. gostall itself stays at v1.0.0. The skip check
+      # tests both versions so a binary built against the old x/tools is
+      # rebuilt.
+      - name: Ensure gostall v1.0.0 (pinned, x/tools v0.52.0)
         run: |
+          set -euo pipefail
           GOBIN="$(go env GOPATH)/bin"
-          if ! go version -m "$GOBIN/gostall" 2>/dev/null | grep -q "erfanmomeniii/gostall.*v1.0.0"; then
-            go install github.com/erfanmomeniii/gostall/cmd/gostall@v1.0.0
+          info="$(go version -m "$GOBIN/gostall" 2>/dev/null || true)"
+          if ! grep -q "erfanmomeniii/gostall.*v1.0.0" <<<"$info" \
+            || ! grep -q "golang.org/x/tools.*v0.52.0" <<<"$info"; then
+            build="$(mktemp -d)"
+            (
+              cd "$build"
+              go mod init gostallbuild
+              go get github.com/erfanmomeniii/gostall/cmd/gostall@v1.0.0 golang.org/x/tools@v0.52.0
+              GOBIN="$GOBIN" go install github.com/erfanmomeniii/gostall/cmd/gostall
+            )
           fi
       - run: make preflight
       - uses: golangci/golangci-lint-action@v7
         with:
-          version: v2.12.2
+          version: v2.15.0
